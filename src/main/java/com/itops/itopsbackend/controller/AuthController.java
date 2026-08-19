@@ -3,9 +3,13 @@ package com.itops.itopsbackend.controller;
 import com.itops.itopsbackend.dto.LoginRequest;
 import com.itops.itopsbackend.entity.User;
 import com.itops.itopsbackend.entity.UserRole;
+import com.itops.itopsbackend.service.JwtService;
 import com.itops.itopsbackend.service.UserService;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,10 +23,15 @@ public class AuthController {
 
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
-    public AuthController(UserService userService, PasswordEncoder passwordEncoder) {
+    public AuthController(UserService userService, PasswordEncoder passwordEncoder,
+            AuthenticationManager authenticationManager, JwtService jwtService) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtService = jwtService;
     }
 
     @PostMapping("/register")
@@ -53,18 +62,17 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        Optional<User> userOpt = userService.findByEmail(request.email());
-        if (userOpt.isEmpty()) {
+        try {
+            authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        } catch (AuthenticationException exception) {
             return ResponseEntity.status(401).body(Map.of("message", "Invalid credentials"));
         }
 
-        User user = userOpt.get();
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            return ResponseEntity.status(401).body(Map.of("message", "Invalid credentials"));
-        }
-
+        User user = userService.findByEmail(request.email()).orElseThrow();
         return ResponseEntity.ok(Map.of(
             "message", "Login successful",
+            "token", jwtService.generateToken(user),
             "userId", user.getId(),
             "email", user.getEmail(),
             "role", user.getRole().name()
