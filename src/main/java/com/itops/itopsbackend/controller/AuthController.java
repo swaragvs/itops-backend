@@ -40,6 +40,7 @@ public class AuthController {
         String email = payload.get("email");
         String password = payload.get("password");
         String department = payload.get("department");
+        String roleStr = payload.get("role");
 
         if (name == null || email == null || password == null || department == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Missing required fields"));
@@ -50,7 +51,16 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "User already exists"));
         }
 
-        User user = userService.registerUser(name, email, password, UserRole.EMPLOYEE, department);
+        UserRole role = UserRole.EMPLOYEE;
+        if (roleStr != null) {
+            try {
+                role = UserRole.valueOf(roleStr.toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                // Keep EMPLOYEE as the default for invalid role values.
+            }
+        }
+
+        User user = userService.registerUser(name, email, password, role, department);
         return ResponseEntity.ok(Map.of(
             "id", user.getId(),
             "name", user.getName(),
